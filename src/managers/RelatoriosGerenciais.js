@@ -53,7 +53,79 @@ export class RelatoriosGerenciais {
                 impedidos.push(`Empresa - ${cliente.nome} (CNPJ: ${cliente.documento})`);
             }
         }
-        
         return impedidos;
+    }
+
+    // Lista todos os registros de estacionamento de um cliente específico dentro de um período
+    historicoClienteCadastrado(documento, dataInicio, dataFim) {
+        const cliente = this.cadastro.clientes.get(documento); 
+        if (!cliente) return "Cliente não encontrado.";
+
+        // Filtra os tickets cruzando a validação no Set de placas do cliente e o intervalo de datas
+        const historico = this.registro.tickets.filter(t => 
+            cliente.placas.has(t.placa) && 
+            t.dataEntrada >= dataInicio && 
+            t.dataEntrada <= dataFim
+        );
+
+        // Retorna um objeto formatado que lista todos os veículos do cliente (caso ele tenha mais de um)
+        return {
+            cliente: cliente.nome,
+            registros: historico.map(t => ({
+                placa: t.placa,
+                dataEntrada: t.dataEntrada.toLocaleString(),
+                dataSaida: t.dataSaida ? t.dataSaida.toLocaleString() : "Ainda estacionado",
+                pago: t.valorPago
+            }))
+        };
+    }
+
+    // Lista todos os registros de clientes não cadastrados dentro de um período
+    historicoAvulso(dataInicio, dataFim) {
+        const historico = this.registro.tickets.filter(t => 
+            t.tipoCliente === 'ClienteAvulso' &&
+            t.dataEntrada >= dataInicio && 
+            t.dataEntrada <= dataFim
+        );
+
+        return historico.map(t => ({
+            placa: t.placa,
+            dataEntrada: t.dataEntrada.toLocaleString(),
+            dataSaida: t.dataSaida ? t.dataSaida.toLocaleString() : "Ainda estacionado",
+            pago: t.valorPago
+        }));
+    }
+
+    // Gera um ranking dos 10 clientes que mais visitaram no ano informado
+    top10Frequentes(ano) {
+        const contagemFrequencia = new Map();
+        const ticketsDoAno = this.registro.tickets.filter(t => 
+            t.dataEntrada.getFullYear() === ano
+        );
+
+        for (const ticket of ticketsDoAno) {
+            let chaveIdentificacao;
+            // Busca no mapa de placas para ver se o dono é cadastrado
+            const clienteCadastrado = this.cadastro.buscarClientePorPlaca(ticket.placa);
+
+            if (clienteCadastrado) {
+                // Se for cadastrado, agrupa pelo nome
+                chaveIdentificacao = `Cadastrado - ${clienteCadastrado.nome}`;
+            } else {
+                // Clientes avulsos são identificados exclusivamente pela placa
+                chaveIdentificacao = `Avulso - Placa ${ticket.placa}`;
+            }
+
+            // Incrementa o contador daquele cliente no Map. Se não existir, começa do zero e soma 1
+            const totalAcessos = contagemFrequencia.get(chaveIdentificacao) || 0;
+            contagemFrequencia.set(chaveIdentificacao, totalAcessos + 1);
+        }
+
+        // Converte o Map num Array para poder ordenar e cortar
+        const ranking = Array.from(contagemFrequencia.entries())
+            .sort((a, b) => b[1] - a[1]) // Ordena de forma decrescente
+            .slice(0, 10); // Pega apenas os 10 primeiros colocados
+        
+        return ranking.map((item, index) => `${index + 1}º LUGAR: ${item[0]} -> ${item[1]} acessos`);
     }
 }
